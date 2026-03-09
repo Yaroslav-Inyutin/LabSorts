@@ -2,8 +2,11 @@
 
 #include "csv-parser.hpp"
 #include <SFML/Graphics.hpp>
+
 #include <chrono>
 #include <thread>
+#include <fstream>
+
 #include <iostream>
 
 void DisplaySortAnimation(FileParser& parser) {
@@ -20,8 +23,6 @@ void DisplaySortAnimation(FileParser& parser) {
         std::cout << "Couldn't load texture" << std::endl;
         exit(0);
     }
-
-    // unsigned int FrameTimeAsMs = 10 * 1000 / (Nrows - 1);
 
     // idiot check
 
@@ -46,22 +47,52 @@ void DisplaySortAnimation(FileParser& parser) {
             if ( data[i-1][j] == data[i][j] && iteration_when_ready[j] == i )
                 iteration_when_ready[j] -= 1;
 
+    // config
+
+    unsigned int config_prepare_delay_ms = 0;
+    unsigned int config_sorting_time_ms = 9'000;
+    unsigned int config_admire_delay_ms = 3'000;
+
+    std::ifstream config("vis-config.txt");
+
+    if ( ! config.is_open() )
+        std::cout << "\tWARNING visualiser couldn't read config" << std::endl;
+    
+    else {
+
+        std::vector<std::string> config_words;
+        std::string word;
+
+        while ( config >> word ) {
+            config_words.push_back(word);
+            if ( config_words.size() >= 3 )
+                break;
+        }
+
+        config.close();
+
+        if ( config_words.size() < 3 ) {
+            std::cout << "\tWARNING invalid visualiser config" << std::endl;
+            exit(0);
+        }
+
+        config_prepare_delay_ms = str2uns(config_words[0]);
+        config_sorting_time_ms = str2uns(config_words[1]);
+        config_admire_delay_ms = str2uns(config_words[2]);
+    }
+
+    const unsigned int prepare_delay_ms = config_prepare_delay_ms;
+    const unsigned int sorting_time_ms = config_sorting_time_ms;
+    const unsigned int admire_delay_ms = config_admire_delay_ms;
+
     // window
-
-    // ==================== TIME CONFIG HERE ====================
-
-    const unsigned int prepare_delay_ms = 0;
-    const unsigned int sorting_time_ms = 9'000;
-    const unsigned int admire_delay_ms = 3'000;
-
-    // ==================== TIME CONFIG HERE ====================
 
     std::cout << "Disks:\tSteps:\tTime ms:" << std::endl;
     std::cout << Ncolumns << "\t" << Nrows << "\t" << prepare_delay_ms << " + " << sorting_time_ms << " + " << admire_delay_ms << std::endl;
     std::cout << "Running window" << std::endl;
     
     sf::RenderWindow window(sf::VideoMode(1294, 800), "Sorting: " + parser.getFileName());
-    // window.setFramerateLimit(50);
+    window.setFramerateLimit(60);
 
     // disks setup
 
@@ -105,11 +136,9 @@ void DisplaySortAnimation(FileParser& parser) {
     unsigned int iteration = 0;
     // bool IsMoving = false;
 
-    sf::Clock clock;
-    clock.restart();
-    
     std::this_thread::sleep_for(std::chrono::milliseconds( prepare_delay_ms ));
-    std::chrono::time_point time_of_start = std::chrono::high_resolution_clock::now();
+
+    auto start_time_point = std::chrono::steady_clock::now();
 
     while (window.isOpen())
     {
@@ -126,19 +155,23 @@ void DisplaySortAnimation(FileParser& parser) {
             }
         }
 
-        std::chrono::time_point now = std::chrono::high_resolution_clock::now();
-        auto time_of_running = std::chrono::duration_cast<std::chrono::milliseconds>(now - time_of_start);
-        unsigned int time_of_running_ms = time_of_running.count();
+        auto now_time_point = std::chrono::steady_clock::now();
+        unsigned int time_of_running_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now_time_point - start_time_point).count();
+
+        // std::cout << time_of_running_ms << "\t";
 
         unsigned int desired_iteration = (unsigned int)( time_of_running_ms * Nrows / sorting_time_ms );
 
-        if ( clock.getElapsedTime().asMilliseconds() > 200 ) {
-
-            clock.restart();
-            if ( desired_iteration > iteration )
-                iteration = desired_iteration;
+        if ( desired_iteration < 0 ) {
+            desired_iteration = 0;
+            std::cout << "TIME TRACKING FUCKED UP" << std::endl;
         }
+
+        if ( desired_iteration > iteration )
+            iteration = desired_iteration;
         
+        // std::cout << iteration << std::endl;
+
         if ( iteration < Nrows )
             for ( unsigned int i = 0; i < Ncolumns; i++ )
                 DesiredPositions[i] = 360.f / Ncolumns * ( data[iteration][i] - FinalRow[i] );
@@ -151,19 +184,32 @@ void DisplaySortAnimation(FileParser& parser) {
 
         // display
 
-        window.clear(sf::Color(120, 120, 120));
+        window.clear();
 
         if ( time_of_running_ms > sorting_time_ms ) {
 
-            float rel = 1.5f * (time_of_running_ms - sorting_time_ms) / admire_delay_ms;
-            if ( rel > 1.f )
-                rel = 1.f;
+            float rel = 1.f * (time_of_running_ms - sorting_time_ms) / admire_delay_ms;
 
-            sf::RectangleShape admire_progress( { (float)window.getSize().x * rel, (float)window.getSize().y } );
-            admire_progress.setFillColor( sf::Color(100, 100, 100, 255*(1-rel) ) );
+            sf::RectangleShape progress_bar( { (float)window.getSize().x * rel, (float)window.getSize().y } );
+            progress_bar.setFillColor( sf::Color(120, 120, 120) );
 
-            admire_progress.setPosition( 0, 0 );
-            window.draw(admire_progress);
+            progress_bar.setPosition( 0, 0 );
+
+            window.clear(sf::Color( 100, 100, 100 ));
+            window.draw(progress_bar);
+        }
+
+        else {
+
+            float rel = 1.f * (time_of_running_ms) / sorting_time_ms;
+
+            sf::RectangleShape progress_bar( { (float)window.getSize().x * rel, (float)window.getSize().y } );
+            progress_bar.setFillColor( sf::Color(100, 100, 100) );
+
+            progress_bar.setPosition( 0, 0 );
+
+            window.clear(sf::Color( 120, 120, 120) );
+            window.draw(progress_bar);
         }
 
         for ( unsigned int i = 0; i < disks.size(); i++ ) {

@@ -5,7 +5,6 @@ mkdir sorts
 for file in sorts/*.csv
 do
 	./visualiser "$(basename "$file")"
-
 done
 
 

@@ -5,6 +5,8 @@
 #include <vector>
 using std::string;
 
+unsigned int str2uns(std::string str);
+
 class FileParser {
 private:
     string data_file;
