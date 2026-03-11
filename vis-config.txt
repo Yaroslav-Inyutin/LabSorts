@@ -1,0 +1,9 @@
+0 9'000 3'000
+
+First three words (substrings) of vis-config.txt are treated as:
+
+prepare_delay_ms - time delay with empty (black) window opened (to set screen recording or smth)
+sorting_time_ms - time of the animation itself
+admire_delay_ms - time delay after which window is automatically closed
+
+The remaining words are ignored. Non-number symbols are ignored so feel free to add symbols like ' for convenience.
